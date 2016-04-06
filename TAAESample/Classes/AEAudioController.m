@@ -17,6 +17,7 @@ static const double kMicBandpassCenterFrequency = 2000.0;
 @interface AEAudioController ()
 @property (nonatomic, strong, readwrite) AEAudioUnitInputModule * input;
 @property (nonatomic, strong, readwrite) AEAudioUnitOutput * output;
+@property (nonatomic, strong, readwrite) AEMeteringModule * metering;
 @property (nonatomic, strong, readwrite) AEVarispeedModule * varispeed;
 @property (nonatomic, strong, readwrite) AEAudioFilePlayerModule * drums;
 @property (nonatomic, strong, readwrite) AEAudioFilePlayerModule * bass;
@@ -45,6 +46,12 @@ static const double kMicBandpassCenterFrequency = 2000.0;
     AERenderer * subrenderer = [AERenderer new];
     
     self.output = [[AEAudioUnitOutput alloc] initWithRenderer:renderer];
+    
+    
+    // Setup metering
+    AEMeteringModule * metering = [[AEMeteringModule alloc] initWithRenderer:renderer];
+    self.metering = metering;
+    
     
     NSMutableArray * players = [NSMutableArray array];
     
@@ -220,6 +227,9 @@ static const double kMicBandpassCenterFrequency = 2000.0;
             // Put on output
             AEBufferStackMixToBufferList(context->stack, 1, 0, YES, context->output);
         }
+        
+        // Capture metering
+        AEModuleProcess(metering, context);
     };
     
     return self;

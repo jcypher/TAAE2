@@ -23,6 +23,7 @@
 
 - (AEHostTicks)nextSyncTimeForPlayer:(AEAudioFilePlayerModule * _Nonnull)player;
 
+@property (nonatomic, strong, readonly) AEMeteringModule * _Nonnull metering;
 @property (nonatomic, strong, readonly) AEVarispeedModule * _Nonnull varispeed;
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull drums;
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull bass;
