@@ -17,6 +17,7 @@ let SpeedSliderRestoreInterval = 0.01
 let ShowCountInThreshold       = 0.5
 let NormalRecordRotateSpeed    = 30.0
 let SyncRecordRotateSpeed      = -3.0
+let MeteringUpdateInterval     = 1.0/30.0
 
 class ViewController: UIViewController {
 
@@ -44,6 +45,14 @@ class ViewController: UIViewController {
     private var padWetDryTarget = 0.0
     private var padWetDryValue = 0.0
     private var speedRestoreTimer: NSTimer?
+    private var meteringTimer : NSTimer?
+    private var meterLabel : UITextField!
+    private var meterLabelHighestAvg : UITextField!
+    private var meterLabelHighestPeak : UITextField!
+    private let meterStringFormat = "avg:  %.3f // %.3f         peak: %.3f // %.3f"
+    private let meterStringFormatHighest = "highest:  %.3f"
+    private var maxAvg = 0.0
+    private var maxPeak = 0.0
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -78,6 +87,45 @@ class ViewController: UIViewController {
         
         // Enable/disable actions requiring prior recording
         updateFileActionsEnabled()
+        
+        meteringTimer = NSTimer.scheduledTimerWithTimeInterval(MeteringUpdateInterval, target: self,
+                                                               selector: #selector(updateMeteringTimer), userInfo: nil, repeats: true)
+        
+        let sz = self.view.bounds.size
+        meterLabel = UITextField(frame: CGRect(x: 0, y: 0, width: sz.width, height: 22));
+        meterLabel.text = String(format: meterStringFormat, 0.0,0.0,0.0,0.0);
+        meterLabel.center = CGPoint(x: sz.width/2, y: sz.height * 0.75);
+        meterLabel.textAlignment = NSTextAlignment.Center
+        meterLabel.font = UIFont(name: "Courier", size: 12);
+        self.view.addSubview(meterLabel)
+        
+        meterLabelHighestAvg = UITextField(frame: CGRect(x: 0, y: 0, width: sz.width/3, height: 22));
+        meterLabelHighestAvg.text = String(format: meterStringFormatHighest, 0.0);
+        meterLabelHighestAvg.center = CGPoint(x: sz.width/3, y: sz.height * 0.75 - 22);
+        meterLabelHighestAvg.textAlignment = NSTextAlignment.Center
+        meterLabelHighestAvg.font = UIFont(name: "Courier", size: 12);
+        self.view.addSubview(meterLabelHighestAvg)
+        
+        meterLabelHighestPeak = UITextField(frame: CGRect(x: 0, y: 0, width: sz.width/3, height: 22));
+        meterLabelHighestPeak.text = String(format: meterStringFormatHighest, 0.0);
+        meterLabelHighestPeak.center = CGPoint(x: sz.width * (2/3), y: sz.height * 0.75 - 22);
+        meterLabelHighestPeak.textAlignment = NSTextAlignment.Center
+        meterLabelHighestPeak.font = UIFont(name: "Courier", size: 12);
+        self.view.addSubview(meterLabelHighestPeak)
+    }
+    
+    @objc private func updateMeteringTimer() {
+        if let audio = self.audio {
+            let avgL = audio.metering.avgPowerLeft
+            let avgR = audio.metering.avgPowerRight
+            let peakL = audio.metering.peakPowerLeft
+            let peakR = audio.metering.peakPowerRight
+            meterLabel.text = String(format: meterStringFormat, avgL, avgR, peakL, peakR)
+            maxAvg = max(maxAvg, max(avgL, avgR))
+            maxPeak = max(maxPeak, max(peakL, peakR))
+            meterLabelHighestAvg.text = String(format: meterStringFormatHighest, maxAvg);
+            meterLabelHighestPeak.text = String(format: meterStringFormatHighest, maxPeak);
+        }
     }
     
     override func prefersStatusBarHidden() -> Bool {
