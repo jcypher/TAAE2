@@ -9,11 +9,11 @@
 #import "AEMeteringModule.h"
 #import <Accelerate/Accelerate.h>
 
-@import AudioToolbox;
-
 @implementation AEMeteringModule {
-    double _lastAvgPower[2];
-    double _lastPeakPower[2];
+    float _avgPowerLeft;
+    float _avgPowerRight;
+    float _peakPowerLeft;
+    float _peakPowerRight;
 }
 
 - (instancetype)initWithRenderer:(AERenderer *)renderer {
@@ -23,19 +23,19 @@
 }
 
 - (double)avgPowerLeft {
-    return _lastAvgPower[0];
+    return (double)_avgPowerLeft;
 }
 
 - (double)avgPowerRight {
-    return _lastAvgPower[1];
+    return (double)_avgPowerRight;
 }
 
 - (double)peakPowerLeft {
-    return _lastPeakPower[0];
+    return (double)_peakPowerLeft;
 }
 
 - (double)peakPowerRight {
-    return _lastPeakPower[1];
+    return (double)_peakPowerRight;
 }
 
 static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * THIS,
@@ -48,8 +48,8 @@ static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * THIS,
         float avg  = 0.0f, peak = 0.0f;
         vDSP_meamgv((float*)abl->mBuffers[0].mData, 1, &avg,  context->frames);
         vDSP_maxmgv((float*)abl->mBuffers[0].mData, 1, &peak, context->frames);
-        THIS->_lastPeakPower[0] = peak;
-        THIS->_lastAvgPower[0] = avg;
+        THIS->_peakPowerLeft = peak;
+        THIS->_avgPowerLeft = avg;
     }
     
     // "Right" Channel
@@ -57,8 +57,8 @@ static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * THIS,
         float avg  = 0.0f, peak = 0.0f;
         vDSP_meamgv((float*)abl->mBuffers[1].mData, 1, &avg,  context->frames);
         vDSP_maxmgv((float*)abl->mBuffers[1].mData, 1, &peak, context->frames);
-        THIS->_lastPeakPower[1] = peak;
-        THIS->_lastAvgPower[1] = avg;
+        THIS->_avgPowerRight = peak;
+        THIS->_peakPowerRight = avg;
     }
 }
 

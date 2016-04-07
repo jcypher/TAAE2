@@ -28,11 +28,9 @@
 extern "C" {
 #endif
     
-#import "AEAudioUnitModule.h"
-#import "AETime.h"
+#import "AEModule.h"
     
 @class AEMeteringModule;
-
 
 /*!
  * Stereo Audio Metering Module
@@ -50,11 +48,8 @@ extern "C" {
 - (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer;
 
 @property (nonatomic, readonly) double avgPowerLeft;
-
 @property (nonatomic, readonly) double avgPowerRight;
-
 @property (nonatomic, readonly) double peakPowerLeft;
-
 @property (nonatomic, readonly) double peakPowerRight;
 
 @end
