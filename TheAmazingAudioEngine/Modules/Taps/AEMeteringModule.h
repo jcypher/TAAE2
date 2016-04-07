@@ -27,10 +27,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
+
 #import "AEModule.h"
-    
-@class AEMeteringModule;
 
 /*!
  * Stereo Audio Metering Module
@@ -53,7 +51,7 @@ extern "C" {
 @property (nonatomic, readonly) double peakPowerRight;
 
 @end
-    
+
 #ifdef __cplusplus
 }
 #endif
