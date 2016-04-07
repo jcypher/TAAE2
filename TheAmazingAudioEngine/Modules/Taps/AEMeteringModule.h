@@ -54,4 +54,8 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+<<<<<<< HEAD
 #endif
+=======
+#endif
+>>>>>>> master

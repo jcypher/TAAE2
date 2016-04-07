@@ -63,4 +63,7 @@ static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * THIS,
 }
 
 @end
+<<<<<<< HEAD
 
+=======
+>>>>>>> master
