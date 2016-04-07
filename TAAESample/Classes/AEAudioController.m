@@ -49,7 +49,7 @@ static const double kMicBandpassCenterFrequency = 2000.0;
     
     
     // Setup metering
-    AEMeteringModule * metering = [[AEMeteringModule alloc] initWithRenderer:renderer];
+    AEMeteringModule * metering = [[AEMeteringModule alloc] initWithRenderer:renderer numberOfChannels:2];
     self.metering = metering;
     
     

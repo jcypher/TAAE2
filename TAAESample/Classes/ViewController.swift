@@ -116,10 +116,10 @@ class ViewController: UIViewController {
     
     @objc private func updateMeteringTimer() {
         if let audio = self.audio {
-            let avgL = audio.metering.avgPowerLeft
-            let avgR = audio.metering.avgPowerRight
-            let peakL = audio.metering.peakPowerLeft
-            let peakR = audio.metering.peakPowerRight
+            let avgL = audio.metering.averagePowerForChannel(0)
+            let avgR = audio.metering.averagePowerForChannel(1)
+            let peakL = audio.metering.peakPowerForChannel(0)
+            let peakR = audio.metering.peakPowerForChannel(1)
             meterLabel.text = String(format: meterStringFormat, avgL, avgR, peakL, peakR)
             maxAvg = max(maxAvg, max(avgL, avgR))
             maxPeak = max(maxPeak, max(peakL, peakR))

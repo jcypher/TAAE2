@@ -10,60 +10,50 @@
 #import <Accelerate/Accelerate.h>
 
 @implementation AEMeteringModule {
-    float _avgPowerLeft;
-    float _avgPowerRight;
-    float _peakPowerLeft;
-    float _peakPowerRight;
+    unsigned int _numChannels;
+    float * _averages;
+    float * _peaks;
 }
 
-- (instancetype)initWithRenderer:(AERenderer *)renderer {
-    if ( !(self = [super initWithRenderer:renderer]) ) return nil;
+- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer {
+    return [self initWithRenderer:renderer numberOfChannels:renderer.outputChannels];
+}
+
+- (instancetype _Nullable)initWithRenderer:(AERenderer *)renderer numberOfChannels:(unsigned int)channelCount {
+    if ( channelCount < 1 || !(self = [super initWithRenderer:renderer]) ) return nil;
+    _numChannels = channelCount;
+    _averages = calloc(_numChannels, sizeof(float));
+    _peaks = calloc(_numChannels, sizeof(float));
     self.processFunction = AEMeteringModuleProcess;
     return self;
 }
 
-- (double)avgPowerLeft {
-    return (double)_avgPowerLeft;
+- (void)dealloc {
+    free(_averages);
+    free(_peaks);
 }
 
-- (double)avgPowerRight {
-    return (double)_avgPowerRight;
+- (double)averagePowerForChannel:(unsigned int)channelIndex {
+    return (double)( channelIndex >= _numChannels ? 0.0 : _averages[channelIndex] );
 }
 
-- (double)peakPowerLeft {
-    return (double)_peakPowerLeft;
-}
-
-- (double)peakPowerRight {
-    return (double)_peakPowerRight;
+- (double)peakPowerForChannel:(unsigned int)channelIndex {
+    return (double)( channelIndex >= _numChannels ? 0.0 : _peaks[channelIndex] );
 }
 
 static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * THIS,
-                                        const AERenderContext * _Nonnull context) {
+                                    const AERenderContext * _Nonnull context) {
     const AudioBufferList * abl = AEBufferStackGet(context->stack, 0);
     if ( !abl ) return;
-    
-    // "Left" Channel
-    if ( abl->mNumberBuffers > 0 ) {
-        float avg  = 0.0f, peak = 0.0f;
-        vDSP_meamgv((float*)abl->mBuffers[0].mData, 1, &avg,  context->frames);
-        vDSP_maxmgv((float*)abl->mBuffers[0].mData, 1, &peak, context->frames);
-        THIS->_peakPowerLeft = peak;
-        THIS->_avgPowerLeft = avg;
-    }
-    
-    // "Right" Channel
-    if ( abl->mNumberBuffers > 1 ) {
-        float avg  = 0.0f, peak = 0.0f;
-        vDSP_meamgv((float*)abl->mBuffers[1].mData, 1, &avg,  context->frames);
-        vDSP_maxmgv((float*)abl->mBuffers[1].mData, 1, &peak, context->frames);
-        THIS->_avgPowerRight = peak;
-        THIS->_peakPowerRight = avg;
+    float avg, peak;
+    unsigned int numChannels = (abl->mNumberBuffers > THIS->_numChannels) ? THIS->_numChannels : abl->mNumberBuffers;
+    for ( unsigned int i = 0; i < numChannels; ++i ) {
+        avg = 0.0f, peak = 0.0f;
+        vDSP_meamgv((float*)abl->mBuffers[i].mData, 1, &avg,  context->frames);
+        vDSP_maxmgv((float*)abl->mBuffers[i].mData, 1, &peak, context->frames);
+        THIS->_peaks[i] = peak;
+        THIS->_averages[i] = avg;
     }
 }
 
 @end
-<<<<<<< HEAD
-
-=======
->>>>>>> master

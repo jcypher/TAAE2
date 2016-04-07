@@ -43,19 +43,13 @@ extern "C" {
  *
  * @param renderer The renderer
  */
-- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer;
+- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer numberOfChannels:(unsigned int)channelCount;
 
-@property (nonatomic, readonly) double avgPowerLeft;
-@property (nonatomic, readonly) double avgPowerRight;
-@property (nonatomic, readonly) double peakPowerLeft;
-@property (nonatomic, readonly) double peakPowerRight;
+- (double)averagePowerForChannel:(unsigned int)channelIndex;
+- (double)peakPowerForChannel:(unsigned int)channelIndex;
 
 @end
 
 #ifdef __cplusplus
 }
-<<<<<<< HEAD
 #endif
-=======
-#endif
->>>>>>> master
