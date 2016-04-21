@@ -38,21 +38,21 @@ class ViewController: UIViewController {
     @IBOutlet var playButton: UIButton!
     @IBOutlet var exportButton: UIButton!
     @IBOutlet var micButton: UIButton!
+    @IBOutlet var levelsViewL: UIView!
+    @IBOutlet var levelsViewR: UIView!
     
     var audio: AEAudioController?
     
+    private var meteringTimer : NSTimer?
     private var padWetDryTimer: NSTimer?
     private var padWetDryTarget = 0.0
     private var padWetDryValue = 0.0
     private var speedRestoreTimer: NSTimer?
-    private var meteringTimer : NSTimer?
-    private var meterLabel : UITextField!
-    private var meterLabelHighestAvg : UITextField!
-    private var meterLabelHighestPeak : UITextField!
-    private let meterStringFormat = "avg:  %.3f // %.3f         peak: %.3f // %.3f"
-    private let meterStringFormatHighest = "highest:  %.3f"
-    private var maxAvg = 0.0
-    private var maxPeak = 0.0
+    private let lyrPeakL : CALayer = CALayer()
+    private let lyrPeakR : CALayer = CALayer()
+    private let lyrAvgL  : CALayer = CALayer()
+    private let lyrAvgR  : CALayer = CALayer()
+    private var peaksAreRed = [false, false]
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -87,44 +87,97 @@ class ViewController: UIViewController {
         
         // Enable/disable actions requiring prior recording
         updateFileActionsEnabled()
+    }
+    
+    override func viewDidAppear(animated: Bool) {
+        super.viewDidAppear(animated)
+        if meteringTimer != nil { return } // already initialized
         
-        meteringTimer = NSTimer.scheduledTimerWithTimeInterval(MeteringUpdateInterval, target: self,
-                                                               selector: #selector(updateMeteringTimer), userInfo: nil, repeats: true)
+        // BUGS? At this point any auto-layout stuff has been fully finished - not the case in viewDidLayoutSubviews()
         
-        let sz = self.view.bounds.size
-        meterLabel = UITextField(frame: CGRect(x: 0, y: 0, width: sz.width, height: 22));
-        meterLabel.text = String(format: meterStringFormat, 0.0,0.0,0.0,0.0);
-        meterLabel.center = CGPoint(x: sz.width/2, y: sz.height * 0.75);
-        meterLabel.textAlignment = NSTextAlignment.Center
-        meterLabel.font = UIFont(name: "Courier", size: 12);
-        self.view.addSubview(meterLabel)
+        // Setup Metering Views (use sub-layers to let auto-layout do its own thing with the container views/layers)
+        levelsViewL.backgroundColor = levelsViewL.backgroundColor?.colorWithAlphaComponent(levelsViewL.alpha)
+        levelsViewL.alpha = 1 // to ensure our sublayers have 1.0 alpha
+        levelsViewR.backgroundColor = levelsViewL.backgroundColor
+        levelsViewR.alpha = 1
+        let p = CGPoint(x: 0, y: 0.5);
+        let t = CGAffineTransformMakeScale(0, 1);
+        lyrPeakL.backgroundColor = UIColor.greenColor().CGColor
+        var f = levelsViewL.layer.bounds
+        f = f.offsetBy(dx: f.size.width * -0.5, dy: 0)
+        lyrPeakL.frame = f
+        lyrPeakL.anchorPoint = p
+        levelsViewL.layer.addSublayer(lyrPeakL)
+        lyrPeakL.setAffineTransform(t)
         
-        meterLabelHighestAvg = UITextField(frame: CGRect(x: 0, y: 0, width: sz.width/3, height: 22));
-        meterLabelHighestAvg.text = String(format: meterStringFormatHighest, 0.0);
-        meterLabelHighestAvg.center = CGPoint(x: sz.width/3, y: sz.height * 0.75 - 22);
-        meterLabelHighestAvg.textAlignment = NSTextAlignment.Center
-        meterLabelHighestAvg.font = UIFont(name: "Courier", size: 12);
-        self.view.addSubview(meterLabelHighestAvg)
+        lyrPeakR.backgroundColor = lyrPeakL.backgroundColor
+        lyrPeakR.frame = f
+        lyrPeakR.anchorPoint = p
+        levelsViewR.layer.addSublayer(lyrPeakR)
+        lyrPeakR.setAffineTransform(t)
         
-        meterLabelHighestPeak = UITextField(frame: CGRect(x: 0, y: 0, width: sz.width/3, height: 22));
-        meterLabelHighestPeak.text = String(format: meterStringFormatHighest, 0.0);
-        meterLabelHighestPeak.center = CGPoint(x: sz.width * (2/3), y: sz.height * 0.75 - 22);
-        meterLabelHighestPeak.textAlignment = NSTextAlignment.Center
-        meterLabelHighestPeak.font = UIFont(name: "Courier", size: 12);
-        self.view.addSubview(meterLabelHighestPeak)
+        lyrAvgL.backgroundColor = UIColor(red: 0, green: 0.65, blue: 0, alpha: 1).CGColor
+        lyrAvgL.frame = f
+        lyrAvgL.anchorPoint = p
+        levelsViewL.layer.addSublayer(lyrAvgL)
+        lyrAvgL.setAffineTransform(t)
+        
+        lyrAvgR.backgroundColor = lyrAvgL.backgroundColor
+        lyrAvgR.frame = f
+        lyrAvgR.anchorPoint = p
+        levelsViewR.layer.addSublayer(lyrAvgR)
+        lyrAvgR.setAffineTransform(t)
+        
+        meteringTimer = NSTimer.scheduledTimerWithTimeInterval(MeteringUpdateInterval,
+                                                               target: self,
+                                                               selector: #selector(updateMeteringTimer),
+                                                               userInfo: nil,
+                                                               repeats: true)
     }
     
     @objc private func updateMeteringTimer() {
         if let audio = self.audio {
-            let avgL = audio.metering.averagePowerForChannel(0)
-            let avgR = audio.metering.averagePowerForChannel(1)
-            let peakL = audio.metering.peakPowerForChannel(0)
-            let peakR = audio.metering.peakPowerForChannel(1)
-            meterLabel.text = String(format: meterStringFormat, avgL, avgR, peakL, peakR)
-            maxAvg = max(maxAvg, max(avgL, avgR))
-            maxPeak = max(maxPeak, max(peakL, peakR))
-            meterLabelHighestAvg.text = String(format: meterStringFormatHighest, maxAvg);
-            meterLabelHighestPeak.text = String(format: meterStringFormatHighest, maxPeak);
+            let levels : UnsafePointer<AEMeteringLevels> = audio.meters.levels
+            let peaks = [CGFloat(levels.memory.channels[0].peak), CGFloat(levels.memory.channels[1].peak)]
+            
+            // Set the scale of the level "bars"
+            CATransaction.begin()
+            CATransaction.setDisableActions(true) // instant response (no core-animation actions for scale)
+            lyrPeakL.setAffineTransform(CGAffineTransformMakeScale(peaks[0], 1))
+            lyrPeakR.setAffineTransform(CGAffineTransformMakeScale(peaks[1], 1))
+            lyrAvgL.setAffineTransform(CGAffineTransformMakeScale(CGFloat(levels.memory.channels[0].average), 1))
+            lyrAvgR.setAffineTransform(CGAffineTransformMakeScale(CGFloat(levels.memory.channels[1].average), 1))
+            CATransaction.commit()
+            
+            // Set peak meter color(s)
+            if peaks[0] >= 1 {
+                if !peaksAreRed[0] {
+                    peaksAreRed[0] = true
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true) // instant color change, no animation
+                    lyrPeakL.backgroundColor = UIColor.redColor().CGColor
+                    CATransaction.commit()
+                }
+            } else {
+                if peaksAreRed[0] {
+                    peaksAreRed[0] = false
+                    lyrPeakL.backgroundColor = UIColor.greenColor().CGColor
+                }
+            }
+            if peaks[1] >= 1 {
+                if !peaksAreRed[1] {
+                    peaksAreRed[1] = true
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true)
+                    lyrPeakR.backgroundColor = UIColor.redColor().CGColor
+                    CATransaction.commit()
+                }
+            } else {
+                if peaksAreRed[1] {
+                    peaksAreRed[1] = false
+                    lyrPeakR.backgroundColor = UIColor.greenColor().CGColor
+                }
+            }
         }
     }
     

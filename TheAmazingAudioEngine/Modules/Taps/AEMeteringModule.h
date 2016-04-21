@@ -2,7 +2,7 @@
 //  AEMeteringModule.h
 //  TheAmazingAudioEngine
 //
-//  Created on 4/06/2016.
+//  Created by Leo Thiessen on 2016-04-14.
 //  Copyright © 2016 A Tasty Pixel. All rights reserved.
 //
 //  This software is provided 'as-is', without any express or implied
@@ -24,32 +24,27 @@
 //  3. This notice may not be removed or altered from any source distribution.
 //
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #import "AEModule.h"
 
-/*!
- * Stereo Audio Metering Module
- *
- *  This module calculates the average and peak power for channels 0 and 1 (left/right).
- *  After processing, it leaves the buffer stack intact.
- */
+typedef struct {
+    float average;
+    float peak;
+} AEMeteringChannelLevels;
+
+typedef struct {
+    int maxChannel;
+    AEMeteringChannelLevels * _Nullable channels;
+} AEMeteringLevels;
+
 @interface AEMeteringModule : AEModule
 
-/*!
- * Default initializer
- *
- * @param renderer The renderer
- */
-- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer numberOfChannels:(unsigned int)channelCount;
+/*! Initialize with 2 channels. */
+- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer;
 
-- (double)averagePowerForChannel:(unsigned int)channelIndex;
-- (double)peakPowerForChannel:(unsigned int)channelIndex;
+/*! Initialize with 1-n number of channels. */
+- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer maxChannel:(int)maxChannel;
+
+/*! Obtain average & peak levels, per channel, since the last access to this property. */
+@property (nonatomic, readonly) const AEMeteringLevels * _Nonnull levels;
 
 @end
-
-#ifdef __cplusplus
-}
-#endif

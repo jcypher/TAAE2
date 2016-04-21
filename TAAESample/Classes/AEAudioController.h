@@ -23,7 +23,6 @@
 
 - (AEHostTicks)nextSyncTimeForPlayer:(AEAudioFilePlayerModule * _Nonnull)player;
 
-@property (nonatomic, strong, readonly) AEMeteringModule * _Nonnull metering;
 @property (nonatomic, strong, readonly) AEVarispeedModule * _Nonnull varispeed;
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull drums;
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull bass;
@@ -33,6 +32,8 @@
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull sample3;
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull sweep;
 @property (nonatomic, strong, readonly) AEAudioFilePlayerModule * _Nonnull hit;
+@property (nonatomic, strong, readonly) AEPeakLimiterModule * _Nonnull limiter;
+@property (nonatomic, strong, readonly) AEMeteringModule * _Nonnull meters;
 @property (nonatomic) double bandpassCenterFrequency;
 @property (nonatomic) double bandpassWetDry;
 @property (nonatomic) double balanceSweepRate;

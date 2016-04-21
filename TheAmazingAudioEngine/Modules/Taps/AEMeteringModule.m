@@ -2,57 +2,142 @@
 //  AEMeteringModule.m
 //  TheAmazingAudioEngine
 //
-//  Created on 4/06/2016.
+//  Created by Leo Thiessen on 2016-04-14.
 //  Copyright © 2016 A Tasty Pixel. All rights reserved.
+//
+//  This software is provided 'as-is', without any express or implied
+//  warranty.  In no event will the authors be held liable for any damages
+//  arising from the use of this software.
+//
+//  Permission is granted to anyone to use this software for any purpose,
+//  including commercial applications, and to alter it and redistribute it
+//  freely, subject to the following restrictions:
+//
+//  1. The origin of this software must not be misrepresented; you must not
+//     claim that you wrote the original software. If you use this software
+//     in a product, an acknowledgment in the product documentation would be
+//     appreciated but is not required.
+//
+//  2. Altered source versions must be plainly marked as such, and must not be
+//     misrepresented as being the original software.
+//
+//  3. This notice may not be removed or altered from any source distribution.
 //
 
 #import "AEMeteringModule.h"
-#import <Accelerate/Accelerate.h>
+#import "AEManagedValue.h"
+@import Accelerate;
 
-@implementation AEMeteringModule {
-    unsigned int _numChannels;
-    float * _averages;
-    float * _peaks;
+/*!
+ * Audio level metering data
+ */
+typedef struct __audio_meters_t {
+    int      maxChannel;
+    int      capacity;
+    double * chanMeanAccumulator;
+    int      chanMeanBlockCount;
+    float *  chanPeak;
+    float *  chanAverage;
+    BOOL     reset;
+} audio_meters_t;
+
+@interface AEMeteringModule () {
+    AEMeteringLevels levelsStruct;
+    audio_meters_t   metersStruct;
+    AEManagedValue * metersValue;
 }
+@end
+
+@implementation AEMeteringModule
 
 - (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer {
-    return [self initWithRenderer:renderer numberOfChannels:renderer.outputChannels];
+    return [self initWithRenderer:renderer maxChannel:2]; // default of 2 channels, aka "stereo"
 }
 
-- (instancetype _Nullable)initWithRenderer:(AERenderer *)renderer numberOfChannels:(unsigned int)channelCount {
-    if ( channelCount < 1 || !(self = [super initWithRenderer:renderer]) ) return nil;
-    _numChannels = channelCount;
-    _averages = calloc(_numChannels, sizeof(float));
-    _peaks = calloc(_numChannels, sizeof(float));
+- (instancetype _Nullable)initWithRenderer:(AERenderer * _Nonnull)renderer maxChannel:(int)maxChannel {
+    if ( maxChannel < 1 || !(self = [super initWithRenderer:renderer]) ) {
+        return nil;
+    }
+    
+    metersStruct.reset               = YES;
+    metersStruct.maxChannel          = maxChannel;
+    metersStruct.capacity            = maxChannel;
+    metersStruct.chanMeanAccumulator = calloc(maxChannel, sizeof(double));
+    metersStruct.chanPeak            = calloc(maxChannel, sizeof(float));
+    metersStruct.chanAverage         = calloc(maxChannel, sizeof(float));
+    metersValue = [AEManagedValue new];
+    metersValue.pointerValue = &metersStruct;
+    metersValue.releaseBlock = ^(void * _Nonnull value){
+        audio_meters_t * meters = (audio_meters_t*)value;
+        free(meters->chanMeanAccumulator);
+        free(meters->chanPeak);
+        free(meters->chanAverage);
+    };
+    
+    levelsStruct.maxChannel = maxChannel;
+    levelsStruct.channels   = calloc(maxChannel, sizeof(AEMeteringChannelLevels));
+    
     self.processFunction = AEMeteringModuleProcess;
     return self;
 }
 
 - (void)dealloc {
-    free(_averages);
-    free(_peaks);
+    if ( levelsStruct.channels ) {
+        free(levelsStruct.channels);
+    }
+    free(&levelsStruct);
 }
 
-- (double)averagePowerForChannel:(unsigned int)channelIndex {
-    return (double)( channelIndex >= _numChannels ? 0.0 : _averages[channelIndex] );
+- (void)rendererDidChangeChannelCount {
+    int newChannelCount = self.renderer.outputChannels;
+    if ( newChannelCount <= metersStruct.capacity ) {
+        metersStruct.maxChannel = newChannelCount;
+        levelsStruct.maxChannel  = newChannelCount;
+        if ( levelsStruct.channels ) {
+            for ( int i = newChannelCount; i < metersStruct.capacity; ++i ) { // Zero out any unused capacity
+                levelsStruct.channels[i].average = 0;
+                levelsStruct.channels[i].peak = 0;
+            }
+        }
+    }
 }
 
-- (double)peakPowerForChannel:(unsigned int)channelIndex {
-    return (double)( channelIndex >= _numChannels ? 0.0 : _peaks[channelIndex] );
+- (AEMeteringLevels * _Nonnull)levels {
+    if ( levelsStruct.channels ) {
+        for ( int i = 0; i < metersStruct.maxChannel; ++i ) {
+            levelsStruct.channels[i].average = metersStruct.chanAverage[i];
+            levelsStruct.channels[i].peak = metersStruct.chanPeak[i];
+        }
+        metersStruct.reset = YES;
+    }
+    return &levelsStruct;
 }
 
-static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * THIS,
+static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * self,
                                     const AERenderContext * _Nonnull context) {
     const AudioBufferList * abl = AEBufferStackGet(context->stack, 0);
     if ( !abl ) return;
-    float avg, peak;
-    unsigned int numChannels = (abl->mNumberBuffers > THIS->_numChannels) ? THIS->_numChannels : abl->mNumberBuffers;
-    for ( unsigned int i = 0; i < numChannels; ++i ) {
-        avg = 0.0f, peak = 0.0f;
-        vDSP_meamgv((float*)abl->mBuffers[i].mData, 1, &avg,  context->frames);
+    
+    audio_meters_t * meters = (audio_meters_t*)AEManagedValueGetValue(self->metersValue);
+    if ( !meters ) return;
+    
+    if ( meters->reset ) {
+        meters->reset = NO;
+        meters->chanMeanBlockCount = 0;
+        vDSP_vclr(meters->chanPeak, 1, meters->capacity);
+        vDSP_vclr(meters->chanAverage, 1, meters->capacity);
+        vDSP_vclrD(meters->chanMeanAccumulator, 1, meters->capacity);
+    }
+    
+    float peak, avg;
+    for ( int i = 0; i < abl->mNumberBuffers && i < meters->maxChannel; ++i ) {
+        peak = 0, avg = 0;
         vDSP_maxmgv((float*)abl->mBuffers[i].mData, 1, &peak, context->frames);
-        THIS->_peaks[i] = peak;
-        THIS->_averages[i] = avg;
+        if ( peak > meters->chanPeak[i] ) { meters->chanPeak[i] = peak; }
+        vDSP_meamgv((float*)abl->mBuffers[i].mData, 1, &avg, context->frames);
+        meters->chanMeanAccumulator[i] += avg;
+        if ( i == 0 ) { meters->chanMeanBlockCount++; }
+        meters->chanAverage[i] = meters->chanMeanAccumulator[i] / (double)meters->chanMeanBlockCount;
     }
 }
 

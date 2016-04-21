@@ -17,7 +17,6 @@ static const double kMicBandpassCenterFrequency = 2000.0;
 @interface AEAudioController ()
 @property (nonatomic, strong, readwrite) AEAudioUnitInputModule * input;
 @property (nonatomic, strong, readwrite) AEAudioUnitOutput * output;
-@property (nonatomic, strong, readwrite) AEMeteringModule * metering;
 @property (nonatomic, strong, readwrite) AEVarispeedModule * varispeed;
 @property (nonatomic, strong, readwrite) AEAudioFilePlayerModule * drums;
 @property (nonatomic, strong, readwrite) AEAudioFilePlayerModule * bass;
@@ -29,6 +28,8 @@ static const double kMicBandpassCenterFrequency = 2000.0;
 @property (nonatomic, strong, readwrite) AEAudioFilePlayerModule * hit;
 @property (nonatomic, strong, readwrite) AEBandpassModule * bandpass;
 @property (nonatomic, strong, readwrite) AEBandpassModule * micBandpass;
+@property (nonatomic, strong, readwrite) AEPeakLimiterModule * limiter;
+@property (nonatomic, strong, readwrite) AEMeteringModule * meters;
 @property (nonatomic, readwrite) BOOL recording;
 @property (nonatomic, readwrite) BOOL playingRecording;
 @property (nonatomic, strong) AEManagedValue * recorderValue;
@@ -46,12 +47,6 @@ static const double kMicBandpassCenterFrequency = 2000.0;
     AERenderer * subrenderer = [AERenderer new];
     
     self.output = [[AEAudioUnitOutput alloc] initWithRenderer:renderer];
-    
-    
-    // Setup metering
-    AEMeteringModule * metering = [[AEMeteringModule alloc] initWithRenderer:renderer numberOfChannels:2];
-    self.metering = metering;
-    
     
     NSMutableArray * players = [NSMutableArray array];
     
@@ -141,6 +136,17 @@ static const double kMicBandpassCenterFrequency = 2000.0;
     };
     self.varispeed = varispeed;
     
+    // Setup limiter module
+    AEPeakLimiterModule * limiter = [[AEPeakLimiterModule alloc] initWithRenderer:renderer];
+    limiter.attackTime = 0.008;
+    limiter.decayTime  = limiter.attackTime * 3.0;
+    limiter.preGain    = 0.0;
+    self.limiter = limiter;
+    
+    // Setup metering module
+    AEMeteringModule * meters = [[AEMeteringModule alloc] initWithRenderer:renderer maxChannel:2];
+    self.meters = meters;
+    
     // Setup recorder placeholder
     AEManagedValue * recorderValue = [AEManagedValue new];
     self.recorderValue = recorderValue;
@@ -186,6 +192,7 @@ static const double kMicBandpassCenterFrequency = 2000.0;
         }
         
         // Put on output
+        AEModuleProcess(limiter, context); // caps at 1.0, seems like a "brick wall" peak lmtr
         AEBufferStackMixToBufferList(context->stack, 1, 0, YES, context->output);
         
         if ( _inputEnabled ) {
@@ -204,6 +211,7 @@ static const double kMicBandpassCenterFrequency = 2000.0;
                     AEDSPApplyGain(AEBufferStackGet(context->stack, 0), 0.1, context->frames);
                 }
                 
+                // Put on output
                 AEBufferStackMixToBufferList(context->stack, 1, 0, YES, context->output);
             }
         }
@@ -228,8 +236,9 @@ static const double kMicBandpassCenterFrequency = 2000.0;
             AEBufferStackMixToBufferList(context->stack, 1, 0, YES, context->output);
         }
         
-        // Capture metering
-        AEModuleProcess(metering, context);
+        // Update metered levels
+        AEDSPApplyGain(AEBufferStackGet(context->stack, 0), 1.001, context->frames); // just to test peak meters > 1.0
+        AEModuleProcess(meters, context);
     };
     
     return self;
