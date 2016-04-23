@@ -57,12 +57,13 @@ typedef struct __audio_meters_t {
         return nil;
     }
     
-    metersStruct.reset               = YES;
     metersStruct.maxChannel          = maxChannel;
     metersStruct.capacity            = maxChannel;
-    metersStruct.chanMeanAccumulator = malloc(maxChannel * sizeof(double));
-    metersStruct.chanPeak            = malloc(maxChannel * sizeof(float));
-    metersStruct.chanAverage         = malloc(maxChannel * sizeof(float));
+    metersStruct.chanMeanAccumulator = calloc(maxChannel, sizeof(double));
+    metersStruct.chanMeanBlockCount  = 0;
+    metersStruct.chanPeak            = calloc(maxChannel, sizeof(float));
+    metersStruct.chanAverage         = calloc(maxChannel, sizeof(float));
+    metersStruct.reset               = NO;
     
     levelsStruct.maxChannel = maxChannel;
     levelsStruct.channels   = calloc(maxChannel, sizeof(AEMeteringChannelLevels));
