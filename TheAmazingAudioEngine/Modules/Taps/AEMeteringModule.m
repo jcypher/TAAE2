@@ -25,7 +25,6 @@
 //
 
 #import "AEMeteringModule.h"
-#import "AEManagedValue.h"
 @import Accelerate;
 
 /*!
@@ -44,7 +43,6 @@ typedef struct __audio_meters_t {
 @interface AEMeteringModule () {
     AEMeteringLevels levelsStruct;
     audio_meters_t   metersStruct;
-    AEManagedValue * metersValue;
 }
 @end
 
@@ -62,17 +60,9 @@ typedef struct __audio_meters_t {
     metersStruct.reset               = YES;
     metersStruct.maxChannel          = maxChannel;
     metersStruct.capacity            = maxChannel;
-    metersStruct.chanMeanAccumulator = calloc(maxChannel, sizeof(double));
-    metersStruct.chanPeak            = calloc(maxChannel, sizeof(float));
-    metersStruct.chanAverage         = calloc(maxChannel, sizeof(float));
-    metersValue = [AEManagedValue new];
-    metersValue.pointerValue = &metersStruct;
-    metersValue.releaseBlock = ^(void * _Nonnull value){
-        audio_meters_t * meters = (audio_meters_t*)value;
-        free(meters->chanMeanAccumulator);
-        free(meters->chanPeak);
-        free(meters->chanAverage);
-    };
+    metersStruct.chanMeanAccumulator = malloc(maxChannel * sizeof(double));
+    metersStruct.chanPeak            = malloc(maxChannel * sizeof(float));
+    metersStruct.chanAverage         = malloc(maxChannel * sizeof(float));
     
     levelsStruct.maxChannel = maxChannel;
     levelsStruct.channels   = calloc(maxChannel, sizeof(AEMeteringChannelLevels));
@@ -86,6 +76,9 @@ typedef struct __audio_meters_t {
         free(levelsStruct.channels);
     }
     free(&levelsStruct);
+    free(metersStruct.chanMeanAccumulator);
+    free(metersStruct.chanPeak);
+    free(metersStruct.chanAverage);
 }
 
 - (void)rendererDidChangeChannelCount {
@@ -118,26 +111,23 @@ static void AEMeteringModuleProcess(__unsafe_unretained AEMeteringModule * self,
     const AudioBufferList * abl = AEBufferStackGet(context->stack, 0);
     if ( !abl ) return;
     
-    audio_meters_t * meters = (audio_meters_t*)AEManagedValueGetValue(self->metersValue);
-    if ( !meters ) return;
-    
-    if ( meters->reset ) {
-        meters->reset = NO;
-        meters->chanMeanBlockCount = 0;
-        vDSP_vclr(meters->chanPeak, 1, meters->capacity);
-        vDSP_vclr(meters->chanAverage, 1, meters->capacity);
-        vDSP_vclrD(meters->chanMeanAccumulator, 1, meters->capacity);
+    if ( self->metersStruct.reset ) {
+        self->metersStruct.reset = NO;
+        self->metersStruct.chanMeanBlockCount = 0;
+        vDSP_vclr(self->metersStruct.chanPeak, 1, self->metersStruct.capacity);
+        vDSP_vclr(self->metersStruct.chanAverage, 1, self->metersStruct.capacity);
+        vDSP_vclrD(self->metersStruct.chanMeanAccumulator, 1, self->metersStruct.capacity);
     }
     
     float peak, avg;
-    for ( int i = 0; i < abl->mNumberBuffers && i < meters->maxChannel; ++i ) {
+    for ( int i = 0; i < abl->mNumberBuffers && i < self->metersStruct.maxChannel; ++i ) {
         peak = 0, avg = 0;
         vDSP_maxmgv((float*)abl->mBuffers[i].mData, 1, &peak, context->frames);
-        if ( peak > meters->chanPeak[i] ) { meters->chanPeak[i] = peak; }
+        if ( peak > self->metersStruct.chanPeak[i] ) { self->metersStruct.chanPeak[i] = peak; }
         vDSP_meamgv((float*)abl->mBuffers[i].mData, 1, &avg, context->frames);
-        meters->chanMeanAccumulator[i] += avg;
-        if ( i == 0 ) { meters->chanMeanBlockCount++; }
-        meters->chanAverage[i] = meters->chanMeanAccumulator[i] / (double)meters->chanMeanBlockCount;
+        self->metersStruct.chanMeanAccumulator[i] += avg;
+        if ( i == 0 ) { self->metersStruct.chanMeanBlockCount++; }
+        self->metersStruct.chanAverage[i] = self->metersStruct.chanMeanAccumulator[i] / (double)self->metersStruct.chanMeanBlockCount;
     }
 }
 
